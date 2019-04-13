@@ -88,7 +88,6 @@ class UNet(nn.Module):
         space is returned as the result. 
         """
         # Encoding path
-        
         x1 = self.conv1(x)
         x2 = self.conv2(self.pool(x1))
         x3 = self.conv3(self.pool(x2))
