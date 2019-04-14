@@ -103,8 +103,8 @@ def train_():
                 g_running_loss = 0.0
 
         # save the generator and discriminator state after each epoch.
-        torch.save(generator.state_dict(), '/scratch/as3ek/image_colorization/data/models/cifar10_train_generator')
-        torch.save(discriminator.state_dict(), '/scratch/as3ek/image_colorization/data/models/cifar10_train_discriminator')
+        torch.save(generator.state_dict(), '/scratch/as3ek/image_colorization/data/models/unsplash_train_generator')
+        torch.save(discriminator.state_dict(), '/scratch/as3ek/image_colorization/data/models/unsplash_train_discriminator')
 
     print('Finished Training')
 

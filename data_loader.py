@@ -8,13 +8,16 @@ import numpy as np
 ########################################################################
 # The output of torchvision datasets are PILImage images of range [0, 1].
 # We transform them to Tensors.
-tensor_transform = transforms.ToTensor()
+tensor_transform = transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])
 
-trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                        download=True, transform=tensor_transform)
+trainset = torchvision.datasets.ImageFolder(root='data/unsplash_cropped/', 
+                                            transform=tensor_transform)
 
-classes = ('plane', 'car', 'bbird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+# trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+#                                         download=True, transform=tensor_transform)
+
+# classes = ('plane', 'car', 'bbird', 'cat',
+#            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 #########################################################################
 # Transform the images to CieLAB color space by the use of OpenCV library.
@@ -53,6 +56,9 @@ class CieLABDataset(torch.utils.data.Dataset):
         return img
 
 cielab_dataset = CieLABDataset()
-cielab_loader = torch.utils.data.DataLoader(cielab_dataset, batch_size=32,
+cielab_loader = torch.utils.data.DataLoader(cielab_dataset, batch_size=16,
                   shuffle=True, num_workers=2)
+
+
+""
 
