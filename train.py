@@ -71,6 +71,7 @@ def train_():
             d_optimizer.zero_grad()
             d_loss = 0
             logits = discriminator(cat([l_images, c_images], 1))
+            import pdb; pdb.set_trace()
             d_real_loss = d_criterion(logits, ((1 - smooth) * torch.ones(batch_size)).cuda())
 
             logits = discriminator(cat([l_images, fake_images], 1))
