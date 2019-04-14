@@ -8,9 +8,9 @@ import numpy as np
 ########################################################################
 # The output of torchvision datasets are PILImage images of range [0, 1].
 # We transform them to Tensors.
-tensor_transform = transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])
+tensor_transform = transforms.ToTensor()
 
-trainset = torchvision.datasets.ImageFolder(root='data/unsplash_cropped/', 
+trainset = torchvision.datasets.ImageFolder(root='data/unsplash_cropped_resized/', 
                                             transform=tensor_transform)
 
 # trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
