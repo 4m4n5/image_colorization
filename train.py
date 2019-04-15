@@ -25,8 +25,8 @@ discriminator.cuda()
 ###################################################################
 # Create ADAM optimizer for the generator as well the discriminator.
 # Create loss criterion for calculating the L1 and adversarial loss.
-d_optimizer = optim.Adam(discriminator.parameters(), betas=(0.5, 0.999), lr=0.002)
-g_optimizer = optim.Adam(generator.parameters(), betas=(0.5, 0.999), lr=0.002)
+d_optimizer = optim.Adam(discriminator.parameters(), betas=(0.5, 0.999), lr=0.0002)
+g_optimizer = optim.Adam(generator.parameters(), betas=(0.5, 0.999), lr=0.0002)
 
 d_criterion = nn.BCELoss()
 g_criterion_1 = nn.BCELoss()
@@ -51,7 +51,7 @@ def train_():
             # split the lab color space images into luminescence and chrominance channels.
             l_images = lab_images[:, 0, :, :]
             c_images = lab_images[:, 1:, :, :]
-            # shift the source and target images into the range [-0.5, 0.5].
+            # shift the source and target images into the range [-1, 1].
             mean = torch.Tensor([0.5])
             l_images = l_images - mean.expand_as(l_images)
             l_images = 2 * l_images
@@ -71,14 +71,17 @@ def train_():
             d_optimizer.zero_grad()
             d_loss = 0
             logits = discriminator(cat([l_images, c_images], 1))
-            import pdb; pdb.set_trace()
-            d_real_loss = d_criterion(logits, ((1 - smooth) * torch.ones(batch_size)).cuda())
-
-            logits = discriminator(cat([l_images, fake_images], 1))
-            d_fake_loss = d_criterion(logits, (torch.zeros(batch_size)).cuda())
-
+#             import pdb; pdb.set_trace()
+            d_real_loss = d_criterion(logits, ((1 - smooth) * torch.ones(batch_size).unsqueeze(1)).cuda())
+            d_real_loss.backward() # added
+            
+            
+            logits = discriminator(cat([l_images, fake_images], 1).detach())
+            d_fake_loss = d_criterion(logits, (torch.zeros(batch_size).unsqueeze(1)).cuda())
+            d_fake_loss.backward() # added
+            
             d_loss = d_real_loss + d_fake_loss
-            d_loss.backward(retain_graph=True)
+#             d_loss.backward(retain_graph=True)
             d_optimizer.step()
 
             # Train the generator. The loss would be the sum of the adversarial loss
@@ -86,12 +89,16 @@ def train_():
             g_optimizer.zero_grad()
             g_loss = 0
             fake_logits = discriminator(cat([l_images, fake_images], 1))
-            g_fake_loss = g_criterion_1(fake_logits, (torch.ones(batch_size)).cuda())
-
+            g_fake_loss = g_criterion_1(fake_logits, (torch.ones(batch_size).unsqueeze(1)).cuda())
+#             g_fake_loss.backward(retain_graph=True) # added
+            
+            
             g_image_distance_loss = g_lambda * g_criterion_2(fake_images, c_images)
-
+#             g_image_distance_loss.backward() # added
+            
+            
             g_loss = g_fake_loss + g_image_distance_loss
-            g_loss.backward(retain_graph=True)
+            g_loss.backward()
             g_optimizer.step()
 
             # print statistics on pre-defined intervals.

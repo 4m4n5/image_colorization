@@ -57,7 +57,7 @@ class CieLABDataset(torch.utils.data.Dataset):
         return img
 
 cielab_dataset = CieLABDataset()
-cielab_loader = torch.utils.data.DataLoader(cielab_dataset, batch_size=16,
+cielab_loader = torch.utils.data.DataLoader(cielab_dataset, batch_size=2,
                   shuffle=True, num_workers=2)
 
 
