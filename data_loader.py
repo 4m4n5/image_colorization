@@ -80,14 +80,17 @@ class Unsplash_Dataset(data.Dataset):
         print('Load %d images, used %fs' % (self.path.__len__(), time.time()-tic))
 
     def __getitem__(self, index):
+        
         mypath = self.path[index]
         img = self.loader(mypath) # PIL Image
         img = np.array(img)
+        
+        # Resize image if necessary
         if (img.shape[0] != self.size) or (img.shape[1] != self.size):
             img = misc.imresize(img, (self.size, self.size))
 
+        # Convert to lab space
         img_lab = color.rgb2lab(np.array(img)) # np array
-        # img_lab = img_lab[13:13+224, 13:13+224, :]
 
         if self.types == 'classify':
             X_a = np.ravel(img_lab[:,:,1])
@@ -95,15 +98,19 @@ class Unsplash_Dataset(data.Dataset):
             img_ab = np.vstack((X_a, X_b)).T
             _, ind = self.nbrs.kneighbors(img_ab)
             ab_class = np.reshape(ind, (self.size,self.size))
-            # print(ab_class.shape, ab_class.dtype, np.amax(ab_class), np.amin(ab_class))
             ab_class = torch.unsqueeze(torch.LongTensor(ab_class), 0)
 
-        img = (img - 127.5) / 127.5 # -1 to 1
+        # Normalize RGB images -1 to 1
+        img = (img - 127.5) / 127.5
+        # Rearrange channels RGB
         img = torch.FloatTensor(np.transpose(img, (2,0,1)))
+        
+        # Rearrange channels LAB
         img_lab = torch.FloatTensor(np.transpose(img_lab, (2,0,1)))
-
-        img_l = torch.unsqueeze(img_lab[0],0) / 100. # L channel 0-100
-        img_ab = (img_lab[1::] + 0) / 110. # ab channel -110 - 110
+        # Normalize LAB images
+        img_l = torch.unsqueeze(img_lab[0], 0) / 100. # L channel 0-100
+        ######## CHANGED FROM 110 to 128 #########
+        img_ab = (img_lab[1: : ] + 0) / 128. # ab channel -128 to 127
 
         if self.types == 'classify':
             if self.show_ab:
@@ -121,7 +128,52 @@ class Unsplash_Dataset(data.Dataset):
 
 
 ""
+if __name__ == '__main__':
+    data_root = '/scratch/as3ek/image_colorization/data/unsplash_cropped_resized/'
+    # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+    #                                  std=[0.229, 0.224, 0.225])
+
+    image_transform = transforms.Compose([
+                              transforms.ToTensor(),
+                          ])
+
+    und = Unsplash_Dataset(data_root, mode='train',
+                      transform=image_transform, large=True, types='raw')
+
+    data_loader = data.DataLoader(und,
+                                  batch_size=32,
+                                  shuffle=False,
+                                  num_workers=4)
+
+    for i, (data, target) in enumerate(data_loader):
+        print(i, len(und))
+
+""
 glob.glob('data/unsplash_cropped_resized/' + '*/*.jpg')[0].zfill(4)
+
+""
+img = pil_loader('data/unsplash_cropped_resized/people/people_pFstlKzYPNY.jpg')
+
+""
+img = np.array(img)
+
+""
+img_lab = color.rgb2lab(np.array(img))
+
+""
+img_lab = torch.FloatTensor(np.transpose(img_lab, (2,0,1)))
+
+""
+img_l = torch.unsqueeze(img_lab[0], 0) / 100.
+
+""
+torch.max(img_l)
+
+""
+img_ab = (img_lab[1: : ] + 0) / 128.
+
+""
+img_ab
 
 ""
 
