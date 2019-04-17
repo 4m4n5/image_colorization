@@ -38,13 +38,15 @@ def train_():
     Train the dataset for several epochs. 
     """
     g_lambda = 100
-    smooth = 0.1
+    smooth = 0.0
 
     # loop over the dataset multiple times.
     for epoch in range(200):  
         # the generator and discriminator losses are summed for the entire epoch.
         d_running_loss = 0.0
         g_running_loss = 0.0
+        g_running_img_loss = 0.0
+        g_running_fake_loss = 0.0
         for i, data in enumerate(cielab_loader):
 #             import pdb; pdb.set_trace()
             lab_images = data
@@ -76,12 +78,12 @@ def train_():
             d_real_loss.backward() # added
             
             
-            logits = discriminator(cat([l_images, fake_images], 1).detach())
+            logits = discriminator(cat([l_images, fake_images.detach()], 1)) # added detach
             d_fake_loss = d_criterion(logits, (torch.zeros(batch_size).unsqueeze(1)).cuda())
             d_fake_loss.backward() # added
             
             d_loss = d_real_loss + d_fake_loss
-#             d_loss.backward(retain_graph=True)
+#             d_loss.backward()
             d_optimizer.step()
 
             # Train the generator. The loss would be the sum of the adversarial loss
@@ -104,15 +106,20 @@ def train_():
             # print statistics on pre-defined intervals.
             d_running_loss += d_loss
             g_running_loss += g_loss
+            g_running_img_loss += g_image_distance_loss
+            g_running_fake_loss += g_fake_loss
             if i % 10 == 0:
-                print('[%d, %5d] d_loss: %.5f g_loss: %.5f' %
-                      (epoch + 1, i + 1, d_running_loss / 10, g_running_loss / 10))
+                print('[%d, %5d] d_loss: %.5f g_loss: %.5f g_img_loss: %.5f g_fake_loss: %.5f' %
+                      (epoch, i, d_running_loss / 10, g_running_loss / 10, g_running_img_loss / 10,
+                      g_running_fake_loss / 10))
                 d_running_loss = 0.0
                 g_running_loss = 0.0
+                g_running_img_loss = 0.0
+                g_running_fake_loss = 0.0
 
         # save the generator and discriminator state after each epoch.
-        torch.save(generator.state_dict(), '/scratch/as3ek/image_colorization/data/models/unsplash_train_generator')
-        torch.save(discriminator.state_dict(), '/scratch/as3ek/image_colorization/data/models/unsplash_train_discriminator')
+        torch.save(generator.state_dict(), '/scratch/as3ek/image_colorization/data/models/cifar10_train_generator')
+        torch.save(discriminator.state_dict(), '/scratch/as3ek/image_colorization/data/models/cifar10_train_discriminator')
 
     print('Finished Training')
 

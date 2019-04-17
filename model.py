@@ -144,7 +144,7 @@ class DNet(nn.Module):
         self.pool = nn.MaxPool2d(2)
         
         # Last layer
-        self.fc1 = nn.Linear(8 * 8 * 1024, 1)
+        self.fc1 = nn.Linear(2 * 2 * 1024, 1)
         self.fc2 = nn.Linear(1024, 1)
 
     def forward(self, x):
@@ -159,7 +159,7 @@ class DNet(nn.Module):
         x4 = self.conv4(self.pool(x3))
         x5 = self.conv5(self.pool(x4))
 #         import pdb; pdb.set_trace()
-        x6 = x5.view(-1, 8 * 8 * 1024)
+        x6 = x5.view(-1, 2 * 2 * 1024)
 #         x7 = self.fc1(x6)
         
         m = nn.Sigmoid()

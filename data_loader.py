@@ -11,11 +11,11 @@ import numpy as np
 # tensor_transform = transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])
 tensor_transform = transforms.ToTensor()
 
-trainset = torchvision.datasets.ImageFolder(root='data/unsplash_cropped_resized/', 
-                                            transform=tensor_transform)
+# trainset = torchvision.datasets.ImageFolder(root='data/unsplash_cropped_resized/', 
+#                                             transform=tensor_transform)
 
-# trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-#                                         download=True, transform=tensor_transform)
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                        download=True, transform=tensor_transform)
 
 # classes = ('plane', 'car', 'bbird', 'cat',
 #            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
@@ -57,7 +57,7 @@ class CieLABDataset(torch.utils.data.Dataset):
         return img
 
 cielab_dataset = CieLABDataset()
-cielab_loader = torch.utils.data.DataLoader(cielab_dataset, batch_size=2,
+cielab_loader = torch.utils.data.DataLoader(cielab_dataset, batch_size=16,
                   shuffle=True, num_workers=2)
 
 
