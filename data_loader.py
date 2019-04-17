@@ -46,41 +46,25 @@ class Unsplash_Dataset(data.Dataset):
 #             self.imgpath = glob.glob(root + 'img/*.png')
         
         self.size = 128
-        self.imgpath = glob.glob(root + '*/*.jpg')
         
         self.types = types
         self.show_ab = show_ab # show ab channel in classify mode
 
         # read split
         self.train_file = set()
-        
-        with open(self.root + 'train_split.csv', 'r') as f:
-            reader = csv.reader(f, delimiter='\t')
-            for i, row in enumerate(reader):
-                if i == 0:
-                    continue
-                self.train_file.add(str(row[0]).zfill(4))
-
-        assert self.train_file.__len__() == 1392
-
         self.test_file = set()
-        with open(self.root + 'test_split.csv', 'r') as f:
-            reader = csv.reader(f, delimiter='\t')
-            for i, row in enumerate(reader):
-                if i == 0:
-                    continue
-                self.test_file.add(str(row[0]).zfill(4))
-        assert self.test_file.__len__() == 348
-
+        
         self.path = []
+        
         if mode == 'train':
+            self.imgpath = glob.glob(root + 'train/*/*.jpg')
             for item in self.imgpath:
-                if item.split('/')[-1][6:6+4] in self.train_file:
-                    self.path.append(item)
+                self.path.append(item)
+                    
         elif mode == 'test':
+            self.imgpath = glob.glob(root + 'test/*/*.jpg')
             for item in self.imgpath:
-                if item.split('/')[-1][6:6+4] in self.test_file:
-                    self.path.append(item)
+                self.path.append(item)
 
         self.path = sorted(self.path)
 
