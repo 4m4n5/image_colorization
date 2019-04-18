@@ -3,166 +3,181 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class UNet(nn.Module):
-    
-    def unet_conv(self, ch_in, ch_out, is_leaky):
-        """
-        Construct a convolutional unit comprising of two conv layers
-        followed by a batch normalisation layer and ReLU/Leaky ReLU.
-        """
-        if is_leaky:
-            return nn.Sequential(
-                nn.Conv2d(ch_in, ch_out, 3, padding=1),
-                nn.BatchNorm2d(ch_out),
-                nn.LeakyReLU(0.2),
-                nn.Conv2d(ch_out, ch_out, 3, padding=1),
-                nn.BatchNorm2d(ch_out),
-                nn.LeakyReLU(0.2)
-            )
+# UNET PARTS
+class double_conv(nn.Module):
+    '''(conv => BN => ReLU) * 2'''
+    def __init__(self, in_ch, out_ch):
+        super(double_conv, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
+
+
+class inconv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(inconv, self).__init__()
+        self.conv = double_conv(in_ch, out_ch)
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
+
+
+class down(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(down, self).__init__()
+        self.mpconv = nn.Sequential(
+            nn.MaxPool2d(2),
+            double_conv(in_ch, out_ch)
+        )
+
+    def forward(self, x):
+        x = self.mpconv(x)
+        return x
+
+
+class up(nn.Module):
+    def __init__(self, in_ch, out_ch, bilinear=False):
+        super(up, self).__init__()
+
+        #  would be a nice idea if the upsampling could be learned too,
+        #  but my machine do not have enough memory to handle all those weights
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         else:
-            return nn.Sequential(
-                nn.Conv2d(ch_in, ch_out, 3, padding=1),
-                nn.BatchNorm2d(ch_out),
-                nn.ReLU(),
-                nn.Conv2d(ch_out, ch_out, 3, padding=1),
-                nn.BatchNorm2d(ch_out),
-                nn.ReLU()
-            )
+            self.up = nn.ConvTranspose2d(in_ch//2, in_ch//2, 2,100 stride=2)
+
+        self.conv = double_conv(in_ch, out_ch)
+
+    def forward(self, x1, x2):
+        x1 = self.up(x1)
         
-    def up(self, ch_in, ch_out):
-        """
-        Applies a 2D bilinear upsampling to the input image which scales
-        the image 2x times, followed by a convolution with a 1x1 kernel. 
-        """
-        return nn.Sequential(
-            nn.ConvTranspose2d(ch_in, ch_out, 3, 2, 1, 1), 
-            nn.ReLU()
-        )
-    
-    def __init__(self, is_leaky):
-        """
-        In the constructer, all the convolutional, upsampling and max pooling 
-        units are instantiated and assigned as member variables. 
-        """
+        # input is CHW
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+
+        x1 = F.pad(x1, (diffX // 2, diffX - diffX//2,
+                        diffY // 2, diffY - diffY//2))
+        
+        # for padding issues, see 
+        # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
+        # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
+
+        x = torch.cat([x2, x1], dim=1)
+        x = self.conv(x)
+        return x
+
+
+class outconv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super(outconv, self).__init__()
+        self.conv = nn.Conv2d(in_ch, out_ch, 1)
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x
+
+
+# ASSEMBLE PARTS TO GET UNET
+class UNet(nn.Module):
+    def __init__(self, n_channels, n_classes):
         super(UNet, self).__init__()
-        
-        # First encoding layer
-        self.conv1 = self.unet_conv(1, 64, is_leaky)
-        # Second encoding layer
-        self.conv2 = self.unet_conv(64, 128, is_leaky)
-        # Third encoding layer
-        self.conv3 = self.unet_conv(128, 256, is_leaky)
-        # Fourth encoding layer
-        self.conv4 = self.unet_conv(256, 512, is_leaky)
-        # Fifth encoding layer
-        self.conv5 = self.unet_conv(512, 1024, is_leaky)
-        
-        # Pooling layer
-        self.pool = nn.MaxPool2d(2)
-        
-        # First Upsampling layer
-        self.up1 = self.up(1024, 512)
-        # Second Upsampling layer
-        self.up2 = self.up(512, 256)
-        # Third Upsampling layer
-        self.up3 = self.up(256, 128)
-        # Fourth Upsampling layer
-        self.up4 = self.up(128, 64)
-        
-        # First decoding layer
-        self.conv6 = self.unet_conv(1024, 512, False)
-        # Second decoding layer
-        self.conv7 = self.unet_conv(512, 256, False)
-        # Third decoding layer
-        self.conv8 = self.unet_conv(256, 128, False)
-        # Fourth decoding layer
-        self.conv9 = self.unet_conv(128, 64, False)
-        
-        # Last layer
-        self.conv10 = nn.Conv2d(64, 2, 1)
+        self.inc = inconv(n_channels, 64)
+        self.down1 = down(64, 128)
+        self.down2 = down(128, 256)
+        self.down3 = down(256, 512)
+        self.down4 = down(512, 512)
+        self.up1 = up(1024, 256)
+        self.up2 = up(512, 128)
+        self.up3 = up(256, 64)
+        self.up4 = up(128, 64)
+        self.outc = outconv(64, n_classes)
 
     def forward(self, x):
-        """ 
-        An input tensor of a black and white image is accepted and
-        passed through the U-Net model. A colored image in CieLAB color
-        space is returned as the result. 
-        """
-        # Encoding path
-        
-        x1 = self.conv1(x)
-        x2 = self.conv2(self.pool(x1))
-        x3 = self.conv3(self.pool(x2))
-        x4 = self.conv4(self.pool(x3))
-        x5 = self.conv5(self.pool(x4))
-        
-        # Decoding path
-        x = self.conv6(torch.cat((x4, self.up1(x5)), 1))
-        x = self.conv7(torch.cat((x3, self.up2(x)), 1))
-        x = self.conv8(torch.cat((x2, self.up3(x)), 1))
-        x = self.conv9(torch.cat((x1, self.up4(x)), 1))
-        x = self.conv10(x)
-        m = nn.Tanh()
-        x = m(x)
-        
-        return x
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        x = self.outc(x)
+        return torch.tanh(x)
 
 
-class DNet(nn.Module):
-    
-    def unet_conv(self, ch_in, ch_out):
-        """
-        Construct a convolutional unit comprising of two conv layers
-        followed by a batch normalisation layer and Leaky ReLU.
-        """
-        return nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, 3, padding=1),
-            nn.BatchNorm2d(ch_out),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(ch_out, ch_out, 3, padding=1),
-            nn.BatchNorm2d(ch_out),
-            nn.LeakyReLU(0.2)
+input = torch.randn(32, 3, 128, 128)
+
+input.size()
+
+m = ConvDis()
+
+a = m(input)
+
+a.size()
+
+
+class dis_conv_unit(nn.Module):
+    '''(conv => BN => ReLU)'''
+    def __init__(self, in_ch, out_ch):
+        super(dis_conv_unit, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.LeakyReLU(0.1, inplace=True)
         )
-    
-    def __init__(self):
-        super(DNet, self).__init__()
-        """
-        In the constructer, all the convolutional and max pooling units 
-        are instantiated and assigned as member variables. 
-        """
-        # First layer
-        self.conv1 = self.unet_conv(3, 64)
-        # Second layer
-        self.conv2 = self.unet_conv(64, 128)
-        # Third layer
-        self.conv3 = self.unet_conv(128, 256)
-        # Fourth layer
-        self.conv4 = self.unet_conv(256, 512)
-        # Fifth layer
-        self.conv5 = self.unet_conv(512, 1024)
-        
-        # Pooling layer
-        self.pool = nn.MaxPool2d(2)
-        
-        # Last layer
-        self.fc1 = nn.Linear(2 * 2 * 1024, 1)
-        self.fc2 = nn.Linear(1024, 1)
 
     def forward(self, x):
-        """ 
-        An input tensor of a colored image from either the generator or source
-        is accepted and passed through the model. The probability of the image
-        belonging to the source domain is returned as the result. 
-        """
-        x1 = self.conv1(x)
-        x2 = self.conv2(self.pool(x1))
-        x3 = self.conv3(self.pool(x2))
-        x4 = self.conv4(self.pool(x3))
-        x5 = self.conv5(self.pool(x4))
-#         import pdb; pdb.set_trace()
-        x6 = x5.view(-1, 2 * 2 * 1024)
-#         x7 = self.fc1(x6)
-        
-        m = nn.Sigmoid()
-        x = m(self.fc1(x6))
-        
+        x = self.conv(x)
         return x
+
+
+class ConvDis(nn.Module):
+    '''Discriminator'''
+    def __init__(self, in_channels=3, in_size=128):
+        super(ConvDis, self).__init__()
+
+        self.conv1 = dis_conv_unit(in_channels, 64)
+        self.conv2 = dis_conv_unit(64, 128)
+        self.conv3 = dis_conv_unit(128, 256)
+        self.conv4 = dis_conv_unit(256, 512)
+        self.conv5 = dis_conv_unit(512, 512) 
+        
+        # Downsampled size after 5 convs
+        ds_size = in_size // 2 ** 5
+        self.fc = nn.Linear(512 * ds_size ** 2, 1)
+
+    def forward(self, x):
+        h = x
+        h = self.conv1(h)
+        h = self.conv2(h)
+        h = self.conv3(h) 
+        h = self.conv4(h) 
+        h = self.conv5(h) 
+        h = self.fc(a.view(a.shape[0], -1))
+        h = F.sigmoid(h)
+
+        return h
+
+
+b = nn.Linear(512*4*4, 1)
+
+a.view(a.shape[0], -1).size()
+
+512*4*4
+
+128 // 2 ** 5
+
+128 // 2 ** 5
+
+
