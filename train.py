@@ -234,8 +234,7 @@ def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, itera
         labelv = Variable(label)
         errD_real = criterion(torch.squeeze(output), labelv)
         errD_real.backward()
-        D_x = output.data.mean()
-#         
+        D_x = output.data.mean() 
 
         # Train with fake
         # Generate fake output from the Generator
