@@ -24,7 +24,6 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-""
 class Arguments(object):
     def __init__(self, dictionary):
         """Constructor"""
@@ -32,7 +31,6 @@ class Arguments(object):
             setattr(self, key, dictionary[key])
 
 
-""
 # Initialize parameters
 args = {
     'path': '/scratch/as3ek/image_colorization/data/unsplash_cropped/',
@@ -55,7 +53,6 @@ args = {
 args = Arguments(args)
 
 
-""
 def main(args):
     # Initialize models
     # n_channels is input channels and n_classes is output channels
@@ -152,9 +149,10 @@ def main(args):
     val_bs = val_loader.batch_size
 
     # set up plotter, path, etc.
-    global iteration, print_interval, plotter, plotter_basic
+    global iteration, print_interval, plotter, plotter_basic, plot_train_result_interval
     iteration = 0
     print_interval = 5
+    plot_train_result_interval = 20
     plotter = Plotter_GAN_TV()
     plotter_basic = Plotter_GAN()
 
@@ -176,12 +174,12 @@ def main(args):
     for epoch in range(start_epoch, args.num_epoch):
         print('Epoch {}/{}'.format(epoch, args.num_epoch - 1))
         print('-' * 20)
-#         if epoch == 0:
-#             val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch=-1)
+        if epoch == 0:
+            val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch=-1)
         # train
         train_errG, train_errD = train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, iteration)
         # validate
-#         val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch)
+        val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch)
 
         plotter.train_update(train_errG, train_errD)
         plotter.val_update(val_lerrG, val_errD)
@@ -203,7 +201,6 @@ def main(args):
                              % epoch)
 
 
-""
 def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, iteration):
     errorG = AverageMeter() # will be reset after each epoch
     errorD = AverageMeter() # will be reset after each epoch
@@ -294,6 +291,9 @@ def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, itera
             errorD_fake.reset()
             errorG_GAN.reset()
             errorG_R.reset()
+        
+        if iteration % plot_train_result_interval == 0:
+            vis_result(data.data, target_ab.data, fake.data, epoch, True)
 
         iteration += 1
 
@@ -310,7 +310,7 @@ def validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch):
     real_label = 1
     fake_label = 0
 
-    for i, (data, target_ab, target_rgb) in enumerate(train_loader):
+    for i, (data, target_ab, target_rgb) in enumerate(val_loader):
         data, target_ab, target_rgb = Variable(data.cuda()), Variable(target_ab.cuda()), Variable(target_rgb.cuda())
         
         ########################
@@ -343,12 +343,12 @@ def validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch):
 
         errG = errG_GAN + args.lamb * errG_L1
 
-        errorG.update(errG.data[0], target.size(0), history=1)
-        errorD.update(errD.data[0], target.size(0), history=1)
+        errorG.update(errG.data.item(), target_ab.size(0), history=1)
+        errorD.update(errD.data.item(), target_ab.size(0), history=1)
         
         
         if i == 0:
-            vis_result(data.data, target.data, fake.data, epoch)
+            vis_result(data.data, target_ab.data, fake.data, epoch)
 
         if i % 50 == 0:
             print('Validating Epoch %d: [%d/%d]' \
@@ -359,8 +359,42 @@ def validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch):
 
     return errorG.avg, errorD.avg
 
-""
+
+def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):
+    '''visualize images for GAN'''
+    img_list = []
+    for i in range(min(32, val_bs)):
+        l = torch.unsqueeze(torch.squeeze(data_l[i]), 0).cpu().numpy()
+        t_ab = target_ab[i].cpu().numpy()
+        o_ab = output_ab[i].cpu().numpy()
+        
+        t_ab = t_ab * 128.
+        o_ab = o_ab * 128.
+        
+        t_l = l * 100.
+        
+        t_lab = np.concatenate((t_l, t_ab), axis=0)
+        o_lab = np.concatenate((t_l, o_ab), axis=0)
+        
+        raw_rgb = color.lab2rgb(np.array(np.transpose(t_lab, (1,2,0))))
+        pred_rgb = color.lab2rgb(np.array(np.transpose(o_lab, (1,2,0))))
+
+        grey = np.transpose(l, (1,2,0))
+        grey = np.repeat(grey, 3, axis=2).astype(np.float64)
+        img_list.append(np.concatenate((grey, raw_rgb, pred_rgb), 1))
+
+    img_list = [np.concatenate(img_list[4*i:4*(i+1)], axis=1) for i in range(len(img_list) // 4)]
+    img_list = np.concatenate(img_list, axis=0)
+
+    plt.figure(figsize=(36,27))
+    plt.imshow(img_list)
+    plt.axis('off')
+    plt.tight_layout()
+    if is_train:
+        plt.savefig(img_path + 'epoch%d_train.png' % epoch)
+    else:
+        plt.savefig(img_path + 'epoch%d_val.png' % epoch)
+    plt.clf()
+
+
 main(args)
-
-""
-
