@@ -299,6 +299,66 @@ def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, itera
 
     return errorG.avg, errorD.avg
 
+
+def validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch):
+    errorG = AverageMeter()
+    errorD = AverageMeter()
+
+    model_G.eval()
+    model_D.eval()
+
+    real_label = 1
+    fake_label = 0
+
+    for i, (data, target_ab, target_rgb) in enumerate(train_loader):
+        data, target_ab, target_rgb = Variable(data.cuda()), Variable(target_ab.cuda()), Variable(target_rgb.cuda())
+        
+        ########################
+        # D network
+        ########################
+        
+         # Train with real
+        output = model_D(target_ab)
+        label = torch.FloatTensor(target_ab.size(0)).fill_(real_label).cuda()
+        labelv = Variable(label)
+        errD_real = criterion(torch.squeeze(output), labelv)
+        
+        # Train with fake
+        # Generate fake output from the Generator
+        fake =  model_G(data)
+        labelv = Variable(label.fill_(fake_label))
+        output = model_D(fake.detach())
+        errD_fake = criterion(torch.squeeze(output), labelv)
+       
+        errD = errD_real + errD_fake
+        
+        
+        ########################
+        # G network
+        ########################
+        labelv = Variable(label.fill_(real_label))
+        output = model_D(fake)
+        errG_GAN = criterion(torch.squeeze(output), labelv)
+        errG_L1 = L1(fake.view(fake.size(0),-1), target_ab.view(target_ab.size(0),-1))
+
+        errG = errG_GAN + args.lamb * errG_L1
+
+        errorG.update(errG.data[0], target.size(0), history=1)
+        errorD.update(errD.data[0], target.size(0), history=1)
+        
+        
+        if i == 0:
+            vis_result(data.data, target.data, fake.data, epoch)
+
+        if i % 50 == 0:
+            print('Validating Epoch %d: [%d/%d]' \
+                % (epoch, i, len(val_loader)))
+
+    print('Validation: Loss_D: %.4f Loss_G: %.4f '\
+        % (errorD.avg, errorG.avg))
+
+    return errorG.avg, errorD.avg
+
 ""
 main(args)
 
