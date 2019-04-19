@@ -1,6 +1,6 @@
 # from transform import ReLabel, ToLabel, ToSP, Scale
 from model import *
-# from utils import *
+from utils import *
 
 import torch
 import torch.nn as nn
@@ -146,6 +146,33 @@ val_loader = data.DataLoader(data_val,
 
 global val_bs
 val_bs = val_loader.batch_size
+
+""
+# set up plotter, path, etc.
+global iteration, print_interval, plotter, plotter_basic
+iteration = 0
+print_interval = 5
+plotter = Plotter_GAN_TV()
+plotter_basic = Plotter_GAN()
+
+global img_path
+size = str(args.image_size)
+date = str(datetime.datetime.now().day) + '_' + str(datetime.datetime.now().day)
+img_path = '/scratch/as3ek/image_colorization/results/img/%s/GAN_%s%s_%dL1_bs%d_%s_lr_D%s_lr_G%s/' \
+           % (date, args.dataset, size, args.lamb, args.batch_size, 'Adam', str(args.lr_D), str(args.lr_G))
+model_path = '/scratch/as3ek/image_colorization/results/model/%s/GAN_%s%s_%dL1_bs%d_%s_lr_D%s_lr_G%s/' \
+           % (date, args.dataset, size, args.lamb, args.batch_size, 'Adam', str(args.lr_D), str(args.lr_G))
+
+if not os.path.exists(img_path):
+    os.makedirs(img_path)
+if not os.path.exists(model_path):
+    os.makedirs(model_path)
+
+""
+import datetimeetime
+
+""
+
 
 ""
 
