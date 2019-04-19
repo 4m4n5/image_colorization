@@ -116,17 +116,6 @@ class UNet(nn.Module):
         return torch.tanh(x)
 
 
-input = torch.randn(32, 3, 128, 128)
-
-input.size()
-
-m = ConvDis()
-
-a = m(input)
-
-a.size()
-
-
 class dis_conv_unit(nn.Module):
     '''(conv => BN => ReLU)'''
     def __init__(self, in_ch, out_ch):
@@ -165,19 +154,7 @@ class ConvDis(nn.Module):
         h = self.conv4(h) 
         h = self.conv5(h) 
         h = self.fc(a.view(a.shape[0], -1))
+        
         h = F.sigmoid(h)
 
         return h
-
-
-b = nn.Linear(512*4*4, 1)
-
-a.view(a.shape[0], -1).size()
-
-512*4*4
-
-128 // 2 ** 5
-
-128 // 2 ** 5
-
-
