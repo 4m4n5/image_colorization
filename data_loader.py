@@ -7,6 +7,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 # plt.switch_backend('agg')
 import time
+import warnings
+warnings.filterwarnings('ignore')
 
 import torch
 import torchvision
@@ -18,9 +20,6 @@ import glob
 import csv
 from skimage import color
 import skimage
-
-# #### HAVE TO ADD #####
-# from transforms import ReLabel, ToLabel, ToSP, Scale 
 
 ""
 def pil_loader(path):
@@ -138,13 +137,13 @@ if __name__ == '__main__':
                               transforms.ToTensor(),
                           ])
 
-    und = Unsplash_Dataset(data_root, mode='train',
+    und = Unsplash_Dataset(data_root, mode='train', types='raw',
                       transform=image_transform)
 
     data_loader = data.DataLoader(und,
-                                  batch_size=32,
+                                  batch_size=16,
                                   shuffle=False,
                                   num_workers=4)
 
-    for i, (data, target) in enumerate(data_loader):
+    for i, (data, target_ab, target_rgb) in enumerate(data_loader):
         print(i, data.size())
