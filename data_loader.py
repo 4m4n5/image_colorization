@@ -19,7 +19,7 @@ import csv
 from skimage import color
 import skimage
 
-##### HAVE TO ADD #####
+# #### HAVE TO ADD #####
 # from transforms import ReLabel, ToLabel, ToSP, Scale 
 
 ""
@@ -118,7 +118,7 @@ class Unsplash_Dataset(data.Dataset):
                 return img_l, ab_class, img_ab
             return img_l, ab_class
         elif self.types == 'raw':
-            return img_l, img
+            return img_l, img_ab, img
             # if self.show_ab:
             #     return img_l, img_ab, None
         else:

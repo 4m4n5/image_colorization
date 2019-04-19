@@ -133,7 +133,7 @@ class dis_conv_unit(nn.Module):
 
 class ConvDis(nn.Module):
     '''Discriminator'''
-    def __init__(self, in_channels=3, in_size=128):
+    def __init__(self, in_channels=2, in_size=128):
         super(ConvDis, self).__init__()
 
         self.conv1 = dis_conv_unit(in_channels, 64)
@@ -153,7 +153,7 @@ class ConvDis(nn.Module):
         h = self.conv3(h) 
         h = self.conv4(h) 
         h = self.conv5(h) 
-        h = self.fc(a.view(a.shape[0], -1))
+        h = self.fc(h.view(h.shape[0], -1))
         
         h = F.sigmoid(h)
 
