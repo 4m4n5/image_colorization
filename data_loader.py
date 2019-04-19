@@ -110,7 +110,7 @@ class Unsplash_Dataset(data.Dataset):
         # Normalize LAB images
         img_l = torch.unsqueeze(img_lab[0], 0) / 100. # L channel 0-100
         ######## CHANGED FROM 110 to 128 #########
-        img_ab = (img_lab[1: : ] + 0) / 128. # ab channel -128 to 127
+        img_ab = (img_lab[1: : ] + 128) / 255. # ab channel -128 to 127
 
         if self.types == 'classify':
             if self.show_ab:
