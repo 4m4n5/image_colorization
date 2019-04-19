@@ -157,7 +157,7 @@ plotter_basic = Plotter_GAN()
 
 global img_path
 size = str(args.image_size)
-date = str(datetime.datetime.now().day) + '_' + str(datetime.datetime.now().day)
+date = str(datetime.datetime.now().month) + '_' + str(datetime.datetime.now().day)
 img_path = '/scratch/as3ek/image_colorization/results/img/%s/GAN_%s%s_%dL1_bs%d_%s_lr_D%s_lr_G%s/' \
            % (date, args.dataset, size, args.lamb, args.batch_size, 'Adam', str(args.lr_D), str(args.lr_G))
 model_path = '/scratch/as3ek/image_colorization/results/model/%s/GAN_%s%s_%dL1_bs%d_%s_lr_D%s_lr_G%s/' \
@@ -167,12 +167,37 @@ if not os.path.exists(img_path):
     os.makedirs(img_path)
 if not os.path.exists(model_path):
     os.makedirs(model_path)
+    
+start_epoch = 0
 
-""
-import datetimeetime
+for epoch in range(start_epoch, args.num_epoch):
+    print('Epoch {}/{}'.format(epoch, args.num_epoch - 1))
+    print('-' * 20)
+    if epoch == 0:
+        val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch=-1)
+    # train
+    train_errG, train_errD = train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, iteration)
+    # validate
+    val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch)
 
-""
+    plotter.train_update(train_errG, train_errD)
+    plotter.val_update(val_lerrG, val_errD)
+    plotter.draw(img_path + 'train_val.png')
 
+    if args.save:
+        print('Saving check point')
+        save_checkpoint({'epoch': epoch + 1,
+                         'state_dict': model_G.state_dict(),
+                         'optimizer': optimizer_G.state_dict(),
+                         },
+                         filename=model_path+'G_epoch%d.pth.tar' \
+                         % epoch)
+        save_checkpoint({'epoch': epoch + 1,
+                         'state_dict': model_D.state_dict(),
+                         'optimizer': optimizer_D.state_dict(),
+                         },
+                         filename=model_path+'D_epoch%d.pth.tar' \
+                         % epoch)
 
 ""
 
