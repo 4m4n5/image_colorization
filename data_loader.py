@@ -127,6 +127,85 @@ class Unsplash_Dataset(data.Dataset):
         return len(self.path)
 
 
+class CIFAR_Dataset(data.Dataset):
+    def __init__(self, root, shuffle=False, mode='test', size=32, transform=None, 
+                 target_transform=None, types='', show_ab=False, loader=pil_loader):
+
+        tic = time.time()
+        self.root = root
+        self.loader = loader
+        self.image_transform = transform
+        if mode == 'test' and target_transform:
+            self.image_transform = target_transform
+        
+        if mode == 'train':
+            dataset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                                   download=True, transform=self.image_transform)
+        else:
+            dataset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                                   download=True, transform=self.image_transform)
+        
+        self.size = size
+        self.types = types
+        self.show_ab = show_ab # show ab channel in classify mode
+
+        images = []
+        
+        for image, label in dataset:
+            images.append(image)
+        
+        self.images = images
+#         import pdb; pdb.set_trace()
+        
+        print('Load %d images, used %fs' % (len(images), time.time()-tic))
+
+    def __getitem__(self, index):
+        img = self.images[index]
+#         img = np.array(img)
+        img = np.transpose(img, (1, 2, 0))
+        
+        # Resize image if necessary
+        if (img.shape[0] != self.size) or (img.shape[1] != self.size):
+            img = skimage.transform.resize(img, (self.size, self.size))
+
+        # Convert to lab space
+        img_lab = color.rgb2lab(np.array(img)) # np array
+
+        if self.types == 'classify':
+            X_a = np.ravel(img_lab[:,:,1])
+            X_b = np.ravel(img_lab[:,:,2])
+            img_ab = np.vstack((X_a, X_b)).T
+            _, ind = self.nbrs.kneighbors(img_ab)
+            ab_class = np.reshape(ind, (self.size,self.size))
+            ab_class = torch.unsqueeze(torch.LongTensor(ab_class), 0)
+
+        # Normalize RGB images -1 to 1
+        img = (img - 127.5) / 127.5
+        # Rearrange channels RGB
+        img = torch.FloatTensor(np.transpose(img, (2,0,1)))
+        
+        # Rearrange channels LAB
+        img_lab = torch.FloatTensor(np.transpose(img_lab, (2,0,1)))
+        # Normalize LAB images
+        img_l = torch.unsqueeze(img_lab[0], 0) / 100. # L channel 0-100 -> 0-1
+        ######## CHANGED FROM 110 to 128 #########
+        img_ab = (img_lab[1: : ] + 128) / 255. # ab channel -128 to 127 -> 0-1
+
+        if self.types == 'classify':
+            if self.show_ab:
+                return img_l, ab_class, img_ab
+            return img_l, ab_class
+        elif self.types == 'raw':
+            return img_l, img_ab, img
+            # if self.show_ab:
+            #     return img_l, img_ab, None
+        else:
+            return img_l, img_ab
+
+    def __len__(self):
+        return len(self.images)
+
+
 ""
 if __name__ == '__main__':
     data_root = '/scratch/as3ek/image_colorization/data/unsplash_cropped/'
@@ -137,13 +216,16 @@ if __name__ == '__main__':
                               transforms.ToTensor(),
                           ])
 
-    und = Unsplash_Dataset(data_root, mode='train', types='raw',
+    und = CIFAR_Dataset(data_root, mode='train', types='raw',
                       transform=image_transform)
 
     data_loader = data.DataLoader(und,
-                                  batch_size=16,
+                                  batch_size=32,
                                   shuffle=False,
                                   num_workers=4)
 
     for i, (data, target_ab, target_rgb) in enumerate(data_loader):
         print(i, data.size())
+        break
+
+

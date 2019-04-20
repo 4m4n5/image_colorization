@@ -9,10 +9,10 @@ class double_conv(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(double_conv, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, padding=1),
+            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True)
         )
@@ -54,7 +54,7 @@ class up(nn.Module):
         if bilinear:
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.ConvTranspose2d(in_ch//2, in_ch//2, 2, stride=2)
+            self.up = nn.ConvTranspose2d(in_ch//2, in_ch//2, 3, stride=2, bias=False)
 
         self.conv = double_conv(in_ch, out_ch)
 
@@ -80,7 +80,7 @@ class up(nn.Module):
 class outconv(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(outconv, self).__init__()
-        self.conv = nn.Conv2d(in_ch, out_ch, 1)
+        self.conv = nn.Conv2d(in_ch, out_ch, 1, bias=False)
 
     def forward(self, x):
         x = self.conv(x)
@@ -121,7 +121,7 @@ class dis_conv_unit(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(dis_conv_unit, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=1),
+            nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=1, bias=False),
             nn.BatchNorm2d(out_ch),
             nn.LeakyReLU(0.1, inplace=True)
         )
@@ -140,10 +140,17 @@ class ConvDis(nn.Module):
         self.conv2 = dis_conv_unit(64, 128)
         self.conv3 = dis_conv_unit(128, 256)
         self.conv4 = dis_conv_unit(256, 512)
-        self.conv5 = dis_conv_unit(512, 512) 
+        self.conv5 = dis_conv_unit(512, 512)
         
         # Downsampled size after 5 convs
         ds_size = in_size // 2 ** 5
+        
+        self.conv6 = nn.Conv2d(512, 512, ds_size, stride = 1, padding=0, bias=False)
+        self.bn6 = nn.BatchNorm2d(512)
+        self.relu6 = nn.LeakyReLU(0.1)
+        
+        self.conv7 = nn.Conv2d(512, 1, 1, stride=1, padding=0, bias=False)
+        
         self.fc = nn.Linear(512 * ds_size ** 2, 1)
 
     def forward(self, x):
@@ -152,9 +159,15 @@ class ConvDis(nn.Module):
         h = self.conv2(h)
         h = self.conv3(h) 
         h = self.conv4(h) 
-        h = self.conv5(h) 
-        h = self.fc(h.view(h.shape[0], -1))
+        h = self.conv5(h)
         
+        h = self.conv6(h)
+        h = self.bn6(h)
+        h = self.relu6(h)
+        
+        h = self.conv7(h)
         h = F.sigmoid(h)
 
         return h
+
+

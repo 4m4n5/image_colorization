@@ -34,11 +34,11 @@ class Arguments(object):
 # Initialize parameters
 args = {
     'path': '/scratch/as3ek/image_colorization/data/unsplash_cropped/',
-    'dataset': 'unsplash',
-    'batch_size': 16,
+    'dataset': 'cifar',
+    'batch_size': 32,
     'lr_G': 1e-4,
     'lr_D': 1e-4,
-    'weight_decay': 0.9,
+    'weight_decay': 0.0,
     'num_epoch': 100,
     'lamb': 100,
     'test': False, # 'path/to/model/for/test', 
@@ -47,7 +47,7 @@ args = {
     'plot': True,
     'save': True,
     'gpu': 0, 
-    'image_size': 128
+    'image_size': 32
 }
 
 args = Arguments(args)
@@ -57,7 +57,7 @@ def main(args):
     # Initialize models
     # n_channels is input channels and n_classes is output channels
     model_G = UNet(n_channels=1, n_classes=2)
-    model_D = ConvDis()
+    model_D = ConvDis(in_channels=2, in_size=args.image_size)
 
     # Initialize start epochs for G and D
     start_epoch_G = start_epoch_D = 0
@@ -110,8 +110,8 @@ def main(args):
 
     if dataset == 'unsplash':
         from data_loader import Unsplash_Dataset as myDataset
-    # elif dataset == 'flower':
-    #     from load_data import Flower_Dataset as myDataset
+    elif dataset == 'cifar':
+        from data_loader import CIFAR_Dataset as myDataset
     # elif dataset == 'bob':
     #     from load_data import Spongebob_Dataset as myDataset
     else:
@@ -368,8 +368,8 @@ def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):
         t_ab = target_ab[i].cpu().numpy()
         o_ab = output_ab[i].cpu().numpy()
         
-        t_ab = t_ab * 128.
-        o_ab = o_ab * 128.
+        t_ab = (t_ab * 255.) - 128 
+        o_ab = (o_ab * 255.) - 128 
         
         t_l = l * 100.
         
@@ -398,3 +398,5 @@ def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):
 
 
 main(args)
+
+
