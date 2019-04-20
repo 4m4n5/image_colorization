@@ -387,7 +387,6 @@ def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):
     img_list = np.concatenate(img_list, axis=0)
 
     plt.figure(figsize=(36,27))
-    plt.imshow(img_list)
     plt.axis('off')
     plt.tight_layout()
     if is_train:
