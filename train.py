@@ -1,6 +1,7 @@
 # from transform import ReLabel, ToLabel, ToSP, Scale
 from model import *
 from utils import *
+from loss import *
 
 import torch
 import torch.nn as nn
@@ -34,20 +35,20 @@ class Arguments(object):
 # Initialize parameters
 args = {
     'path': '/scratch/as3ek/image_colorization/data/unsplash_cropped/',
-    'dataset': 'cifar',
-    'batch_size': 32,
-    'lr_G': 1e-4,
+    'dataset': 'unsplash',
+    'batch_size': 16,
+    'lr_G': 2e-4,
     'lr_D': 1e-4,
     'weight_decay': 0.0,
     'num_epoch': 100,
-    'lamb': 100,
+    'lamb': 500,
     'test': False, # 'path/to/model/for/test', 
     'model_G': False, # 'path/to/model/to/resume',
     'model_D': False, # 'path/to/model/to/resume',
     'plot': True,
     'save': True,
     'gpu': 0, 
-    'image_size': 32
+    'image_size': 128
 }
 
 args = Arguments(args)
@@ -56,8 +57,8 @@ args = Arguments(args)
 def main(args):
     # Initialize models
     # n_channels is input channels and n_classes is output channels
-    model_G = UNet(n_channels=1, n_classes=2)
-    model_D = ConvDis(in_channels=2, in_size=args.image_size)
+    model_G = UNet(n_channels=1, n_classes=3)
+    model_D = ConvDis(in_channels=3, in_size=args.image_size)
 
     # Initialize start epochs for G and D
     start_epoch_G = start_epoch_D = 0
@@ -103,6 +104,8 @@ def main(args):
     criterion = nn.BCELoss()
     global L1
     L1 = nn.L1Loss()
+    global FeatureLoss
+    FeatureLoss = FeatureLoss()
 
     # Dataset
     data_root = args.path
@@ -174,8 +177,8 @@ def main(args):
     for epoch in range(start_epoch, args.num_epoch):
         print('Epoch {}/{}'.format(epoch, args.num_epoch - 1))
         print('-' * 20)
-        if epoch == 0:
-            val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch=-1)
+#         if epoch == 0:
+#             val_lerrG, val_errD = validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch=-1)
         # train
         train_errG, train_errD = train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, iteration)
         # validate
@@ -251,10 +254,15 @@ def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, itera
         model_G.zero_grad()
         labelv = Variable(label.fill_(real_label))
         output = model_D(fake)
+        
+        real_rgb = target_rgb
+        fake_rgb = lab_to_rgb(data, fake)
+        
         errG_GAN = criterion(torch.squeeze(output), labelv)
         errG_L1 = L1(fake.view(fake.size(0),-1), target_ab.view(target_ab.size(0),-1))
+        errG_Feature = FeatureLoss(fake_rgb, real_rgb)
 
-        errG = errG_GAN + args.lamb * errG_L1
+        errG = errG_GAN + args.lamb * errG_L1 + errG_Feature
         errG.backward()
         D_G_x2 = output.data.mean()
         optimizer_G.step()
@@ -360,9 +368,26 @@ def validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch):
     return errorG.avg, errorD.avg
 
 
+def lab_to_rgb(l, ab):
+    rgb = torch.zeros(16, 3, 32, 32)
+    lab = torch.cat([l, ab], dim=1)
+    print(lab.size())
+
+    for i in range(lab.size(0)):
+        lab_img = lab[i]
+        lab_img = lab_img.permute(1, 2, 0)
+        rgb_img = torch.tensor(color.lab2rgb(lab_img))
+        rgb_img = rgb_img.permute(2, 0, 1)
+
+        rgb[i] = rgb_img
+
+    return rgb
+
+
 def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):
     '''visualize images for GAN'''
     img_list = []
+#     o_ab_list = []
     for i in range(min(32, val_bs)):
         l = torch.unsqueeze(torch.squeeze(data_l[i]), 0).cpu().numpy()
         t_ab = target_ab[i].cpu().numpy()
@@ -370,6 +395,8 @@ def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):
         
         t_ab = (t_ab * 255.) - 128 
         o_ab = (o_ab * 255.) - 128 
+        
+#         o_ab_list.append(o_ab)
         
         t_l = l * 100.
         
@@ -387,6 +414,7 @@ def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):
     img_list = np.concatenate(img_list, axis=0)
 
     plt.figure(figsize=(36,27))
+    plt.imshow(img_list)
     plt.axis('off')
     plt.tight_layout()
     if is_train:
