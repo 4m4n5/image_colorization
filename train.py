@@ -35,20 +35,20 @@ class Arguments(object):
 # Initialize parameters
 args = {
     'path': '/scratch/as3ek/image_colorization/data/unsplash_cropped/',
-    'dataset': 'unsplash',
-    'batch_size': 16,
-    'lr_G': 2e-4,
-    'lr_D': 1e-4,
+    'dataset': 'cifar',
+    'batch_size': 32,
+    'lr_G': 1e-4,
+    'lr_D': 5e-4,
     'weight_decay': 0.0,
     'num_epoch': 100,
-    'lamb': 500,
+    'lamb': 100,
     'test': False, # 'path/to/model/for/test', 
     'model_G': False, # 'path/to/model/to/resume',
     'model_D': False, # 'path/to/model/to/resume',
     'plot': True,
     'save': True,
     'gpu': 0, 
-    'image_size': 128
+    'image_size': 32
 }
 
 args = Arguments(args)
@@ -132,8 +132,7 @@ def main(args):
 
     train_loader = data.DataLoader(data_train,
                                   batch_size=args.batch_size,
-                                  shuffle=False,
-                                  num_workers=4
+                                  shuffle=False
                                   )
 
     data_val = myDataset(data_root, mode='test',
@@ -144,8 +143,7 @@ def main(args):
 
     val_loader = data.DataLoader(data_val,
                                  batch_size=args.batch_size,
-                                 shuffle=False,
-                                 num_workers=4
+                                 shuffle=False
                                 )
 
     global val_bs
@@ -155,7 +153,7 @@ def main(args):
     global iteration, print_interval, plotter, plotter_basic, plot_train_result_interval
     iteration = 0
     print_interval = 5
-    plot_train_result_interval = 20
+    plot_train_result_interval = 100
     plotter = Plotter_GAN_TV()
     plotter_basic = Plotter_GAN()
 
@@ -229,8 +227,8 @@ def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, itera
         
         # Train with real
         model_D.zero_grad()
-        output = model_D(target_ab)
-        label = torch.FloatTensor(target_ab.size(0)).fill_(real_label).cuda()
+        output = model_D(target_rgb)
+        label = torch.FloatTensor(target_rgb.size(0)).fill_(real_label).cuda()
         labelv = Variable(label)
         errD_real = criterion(torch.squeeze(output), labelv)
         errD_real.backward()
@@ -255,14 +253,14 @@ def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, itera
         labelv = Variable(label.fill_(real_label))
         output = model_D(fake)
         
-        real_rgb = target_rgb
-        fake_rgb = lab_to_rgb(data, fake)
+#         real_rgb = target_rgb
+#         fake_rgb = fake
         
         errG_GAN = criterion(torch.squeeze(output), labelv)
-        errG_L1 = L1(fake.view(fake.size(0),-1), target_ab.view(target_ab.size(0),-1))
-        errG_Feature = FeatureLoss(fake_rgb, real_rgb)
+        errG_L1 = L1(fake.view(fake.size(0),-1), target_rgb.view(target_rgb.size(0),-1))
+        errG_Feature = FeatureLoss(fake, target_rgb)
 
-        errG = errG_GAN + args.lamb * errG_L1 + errG_Feature
+        errG = errG_GAN + args.lamb * errG_Feature
         errG.backward()
         D_G_x2 = output.data.mean()
         optimizer_G.step()
@@ -301,7 +299,7 @@ def train(train_loader, model_G, model_D, optimizer_G, optimizer_D, epoch, itera
             errorG_R.reset()
         
         if iteration % plot_train_result_interval == 0:
-            vis_result(data.data, target_ab.data, fake.data, epoch, True)
+            vis_result_rgb(data.data, fake.data, target_rgb.data, epoch, True)
 
         iteration += 1
 
@@ -326,8 +324,8 @@ def validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch):
         ########################
         
          # Train with real
-        output = model_D(target_ab)
-        label = torch.FloatTensor(target_ab.size(0)).fill_(real_label).cuda()
+        output = model_D(target_rgb)
+        label = torch.FloatTensor(target_rgb.size(0)).fill_(real_label).cuda()
         labelv = Variable(label)
         errD_real = criterion(torch.squeeze(output), labelv)
         
@@ -347,16 +345,17 @@ def validate(val_loader, model_G, model_D, optimizer_G, optimizer_D, epoch):
         labelv = Variable(label.fill_(real_label))
         output = model_D(fake)
         errG_GAN = criterion(torch.squeeze(output), labelv)
-        errG_L1 = L1(fake.view(fake.size(0),-1), target_ab.view(target_ab.size(0),-1))
-
-        errG = errG_GAN + args.lamb * errG_L1
+#         errG_L1 = L1(fake.view(fake.size(0),-1), target_ab.view(target_ab.size(0),-1))
+        errG_Feature = FeatureLoss(fake, target_rgb)
+    
+        errG = errG_GAN + args.lamb * errG_Feature
 
         errorG.update(errG.data.item(), target_ab.size(0), history=1)
         errorD.update(errD.data.item(), target_ab.size(0), history=1)
         
         
         if i == 0:
-            vis_result(data.data, target_ab.data, fake.data, epoch)
+            vis_result_rgb(data.data, fake.data, target_rgb.data, epoch)
 
         if i % 50 == 0:
             print('Validating Epoch %d: [%d/%d]' \
@@ -382,6 +381,42 @@ def lab_to_rgb(l, ab):
         rgb[i] = rgb_img
 
     return rgb
+
+
+def vis_result_rgb(data_l, fake_rgb, target_rgb, epoch, is_train=False):
+    '''visualize images for GAN'''
+    img_list = []
+#     o_ab_list = []
+    for i in range(min(32, val_bs)):
+        l = torch.unsqueeze(torch.squeeze(data_l[i]), 0).cpu().numpy()
+        fake_img = fake_rgb[i].cpu().numpy()
+        target_img = target_rgb[i].cpu().numpy()
+        
+        target_img = (target_img + 1) / 2.
+        fake_img = (fake_img + 1) / 2.
+        
+        
+        raw_rgb = np.array(np.transpose(target_img, (1,2,0))) 
+        pred_rgb = np.array(np.transpose(fake_img, (1,2,0)))
+        
+        
+        
+        grey = np.transpose(l, (1,2,0))
+        grey = np.repeat(grey, 3, axis=2).astype(np.float64)
+        img_list.append(np.concatenate((grey, raw_rgb, pred_rgb), 1))
+
+    img_list = [np.concatenate(img_list[4*i:4*(i+1)], axis=1) for i in range(len(img_list) // 4)]
+    img_list = np.concatenate(img_list, axis=0)
+
+    plt.figure(figsize=(36,27))
+    plt.imshow(img_list)
+    plt.axis('off')
+    plt.tight_layout()
+    if is_train:
+        plt.savefig(img_path + 'epoch%d_train.png' % epoch)
+    else:
+        plt.savefig(img_path + 'epoch%d_val.png' % epoch)
+    plt.clf()
 
 
 def vis_result(data_l, target_ab, output_ab, epoch, is_train=False):

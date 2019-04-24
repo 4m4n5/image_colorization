@@ -101,7 +101,7 @@ class Unsplash_Dataset(data.Dataset):
             ab_class = torch.unsqueeze(torch.LongTensor(ab_class), 0)
 
         # Normalize RGB images -1 to 1
-        img = (img - 127.5) / 127.5
+        img = (img * 2.) - 1.
         # Rearrange channels RGB
         img = torch.FloatTensor(np.transpose(img, (2,0,1)))
         
@@ -180,7 +180,7 @@ class CIFAR_Dataset(data.Dataset):
             ab_class = torch.unsqueeze(torch.LongTensor(ab_class), 0)
 
         # Normalize RGB images -1 to 1
-        img = (img - 127.5) / 127.5
+        img = (img * 2.) - 1.
         # Rearrange channels RGB
         img = torch.FloatTensor(np.transpose(img, (2,0,1)))
         
@@ -227,5 +227,3 @@ if __name__ == '__main__':
     for i, (data, target_ab, target_rgb) in enumerate(data_loader):
         print(i, data.size())
         break
-
-

@@ -2,6 +2,39 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from fastai.torch_imports import *
+from fastai.conv_learner import *
+from torch.nn.utils.spectral_norm import spectral_norm
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, in_channel:int, gain:int=1):
+        super().__init__()
+        self.query = self._spectral_init(nn.Conv1d(in_channel, in_channel // 8, 1),gain=gain)
+        self.key = self._spectral_init(nn.Conv1d(in_channel, in_channel // 8, 1),gain=gain)
+        self.value = self._spectral_init(nn.Conv1d(in_channel, in_channel, 1), gain=gain)
+        self.gamma = nn.Parameter(torch.tensor(0.0))
+
+    def _spectral_init(self, module:nn.Module, gain:int=1):
+        nn.init.kaiming_uniform_(module.weight, gain)
+        if module.bias is not None:
+            module.bias.data.zero_()
+
+        return spectral_norm(module)
+
+    def forward(self, input:torch.Tensor):
+        shape = input.shape
+        flatten = input.view(shape[0], shape[1], -1)
+        query = self.query(flatten).permute(0, 2, 1)
+        key = self.key(flatten)
+        value = self.value(flatten)
+        query_key = torch.bmm(query, key)
+        attn = F.softmax(query_key, 1)
+        attn = torch.bmm(value, attn)
+        attn = attn.view(*shape)
+        out = self.gamma * attn + input
+        return out
+
 
 # UNET PARTS
 class double_conv(nn.Module):
@@ -9,12 +42,13 @@ class double_conv(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(double_conv, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
+            nn.Conv2d(in_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.LeakyReLU(0.1, inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.LeakyReLU(0.1, inplace=True)
+            nn.LeakyReLU(0.2, inplace=True),
+            SelfAttention(out_ch, 1)
         )
 
     def forward(self, x):
@@ -54,7 +88,7 @@ class up(nn.Module):
         if bilinear:
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.ConvTranspose2d(in_ch, in_ch//2, 2, stride=2, bias=False)
+            self.up = nn.ConvTranspose2d(in_ch, in_ch//2, 2, stride=2)
 
         self.conv = double_conv(in_ch, out_ch)
 
@@ -81,7 +115,7 @@ class up(nn.Module):
 class outconv(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(outconv, self).__init__()
-        self.conv = nn.Conv2d(in_ch, out_ch, 1, bias=False)
+        self.conv = nn.Conv2d(in_ch, out_ch, 1)
 
     def forward(self, x):
         x = self.conv(x)
@@ -124,7 +158,7 @@ class dis_conv_unit(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(dis_conv_unit, self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=1, bias=False),
+            nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=1),
             nn.BatchNorm2d(out_ch),
             nn.LeakyReLU(0.1, inplace=True)
         )
@@ -148,11 +182,11 @@ class ConvDis(nn.Module):
         # Downsampled size after 5 convs
         ds_size = in_size // 2 ** 5
         
-        self.conv6 = nn.Conv2d(512, 512, ds_size, stride = 1, padding=0, bias=False)
+        self.conv6 = nn.Conv2d(512, 512, ds_size, stride = 1)
         self.bn6 = nn.BatchNorm2d(512)
         self.relu6 = nn.LeakyReLU(0.1)
         
-        self.conv7 = nn.Conv2d(512, 1, 1, stride=1, padding=0, bias=False)
+        self.conv7 = nn.Conv2d(512, 1, 1, stride=1)
         
         self.fc = nn.Linear(512 * ds_size ** 2, 1)
 
